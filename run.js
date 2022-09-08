@@ -14,7 +14,7 @@ const html = `
     <head>
         <meta charset="UTF-8" />
     </head>
-    <body style="padding: 0; margin: 0;">
+    <body style="padding: 0; margin: 0; display:flex" >
         ${solution(json)}
     </body>
     </html>

@@ -33,23 +33,36 @@ const BUTTON_STYLES_MAPPER = {
     paddingRight: (value) => `padding-right: ${value}px;`,
     paddingTop: (value) => `padding-top: ${value}px;`,
     paddingBottom: (value) => `padding-bottom: ${value}px;`,
-    strokeAlign: (value) => `stroke-align: ${value};`,
 }
+
+const TEXT_STYLE_IN_BUTTON = {
+    fontWeight: (value) => `font-weight: ${value};`,
+    fontSize: (value) => `font-size: ${value}px;`,
+    lineHeightPx: (value) => `line-height: ${value}px;`,
+    absoluteBoundingBox: (value) =>
+        `top: ${value.y}px; left: ${value.x}px; height: ${value.height}px; width: 100%;`,
+}
+
+
 
 const buildBlock = ({ type, content, className, style }) => {
     return `<${type} class="${className}" style="${style}">${content}</${type}>`;
 };
 
-const buildCard = ({ type, content, className, style, button }) => {
-    return `<${type} class="${className}" style="${style}">${content} ${button}</${type}>`;
+const buildCard = ({ type, content, className, style }) => {
+    return `<${type} class="${className}" style="${style}">${content}</${type}>`;
 };
 
-const buildImage = ({ type, content, className, style }) => {
+const buildImage = ({ type, className, style }) => {
     return `<${type} class="${className}" style="${style}"/>`;
 }
 
 const buildButton = ({ type, content, className, style }) => {
     return `<${type} class="${className}" style="${style}">${content}</${type}>`; //content is the text
+}
+
+const buildText = ({ type, content, className, style }) => {
+    return `<${type} class="${className}" style="${style}">${content}</${type}>`;
 }
 
 const getTextStyles = (node) => {
@@ -138,6 +151,25 @@ const buttonStyle = (node) => {
         styleArr.push(BUTTON_STYLES_MAPPER["itemSpacing"](node.itemSpacing));
     }
 
+    styleArr.push("border: none;");
+
+    return styleArr.join(" ");
+}
+
+const textStyles = (node) => {
+    const styleArr = [];
+    if (node.absoluteBoundingBox) {
+        styleArr.push(
+            TEXT_STYLE_IN_BUTTON["absoluteBoundingBox"](node.absoluteBoundingBox)
+        );
+    }
+
+    if (node.style) {
+        styleArr.push(TEXT_STYLE_IN_BUTTON["fontWeight"](node.style.fontWeight));
+        styleArr.push(TEXT_STYLE_IN_BUTTON["fontSize"](node.style.fontSize));
+        styleArr.push(TEXT_STYLE_IN_BUTTON["lineHeightPx"](node.style.lineHeightPx));
+    }
+
     return styleArr.join(" ");
 }
 
@@ -179,8 +211,10 @@ const CARD_PRIMITIVES = {
     INSTANCE: (node) => {
         return buildCard({
             type: "div",
-            content: traverseImage(node.children[0]),
-            button: traverseButton(node.children[1]),
+            content: node.children.map((child) => {
+                if (child.name === "Image") return traverseImage(child);
+                if (child.name === "Button") return traverseButton(child);
+            }),
             className: node.type,
             style: cardStyles(node),
         });
@@ -199,11 +233,27 @@ const IMAGE_PRIMITIVES = {
 
 const BUTTON_PRIMITIVES = {
     INSTANCE: (node) => {
+        const text = node.children.map((child) => {
+            if (child.type === "TEXT") {
+                return traverseTextInButton(child);
+            }
+        });
         return buildButton({
             type: "button",
-            content: "node.children[0].characters",
+            content: text,
             className: node.type,
             style: buttonStyle(node),
+        });
+    }
+}
+
+const TEXT_IN_BUTTON_PRIMITIVES = {
+    TEXT: (node) => {
+        return buildText({
+            type: "span",
+            content: node.characters,
+            className: node.type,
+            style: textStyles(node),
         });
     }
 }
@@ -211,7 +261,7 @@ const BUTTON_PRIMITIVES = {
 const parse = (entry) => {
     return (
         traverse(entry.children[0]) +
-        traverseCard(entry.children[0]) 
+        traverseCard(entry.children[0])
         // traverseButton(entry.children[0])
     );
 };
@@ -222,8 +272,16 @@ const traverse = (node) => {
 };
 
 const traverseCard = (node) => {
-    const textNode = node.children[1].children[0];
-    return CARD_PRIMITIVES[textNode.type](textNode);
+    if (node.children[1].children.length > 0) {
+        let cardArrary = [];
+        for (let i = 0; i < node.children[1].children.length; i++) {
+            const cardNode = node.children[1].children[i];
+            cardArrary.push(cardNode);
+        }
+        return cardArrary.map((card) => {
+            return CARD_PRIMITIVES[card.type](card);
+        });
+    }
 };
 
 const traverseImage = (node) => {
@@ -233,8 +291,12 @@ const traverseImage = (node) => {
 
 const traverseButton = (node) => {
     const textNode = node;
-    // console.log(node);
     return BUTTON_PRIMITIVES[textNode.type](textNode);
+}
+
+const traverseTextInButton = (node) => {
+    const textNode = node;
+    return TEXT_IN_BUTTON_PRIMITIVES[textNode.type](textNode);
 }
 
 module.exports = function (json) {
